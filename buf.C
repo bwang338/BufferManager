@@ -160,6 +160,21 @@ const Status BufMgr::unPinPage(File *file, const int PageNo,
 
 const Status BufMgr::allocPage(File *file, int &pageNo, Page *&page)
 {
+    if (file->allocatePage(pageNo) == UNIXERR){
+        return UNIXERR;
+    }
+    int frameNum;
+    if (allocBuf(frameNum) == BUFFEREXCEEDED){
+        return BUFFEREXCEEDED;
+    }
+
+    if (hashTable->insert(file, pageNo, frameNum) == HASHTBLERROR){
+        return HASHTBLERROR;
+    }
+    bufTable[frameNum].Set(file, pageNo);
+    
+    page = &bufPool[frameNum];
+
 }
 
 const Status BufMgr::disposePage(File *file, const int pageNo)
