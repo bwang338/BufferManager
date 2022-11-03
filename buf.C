@@ -125,7 +125,7 @@ const Status BufMgr::readPage(File *file, const int PageNo, Page *&page)
     if (s != OK)
         return s;
 
-    Page *pagePtr;
+    Page *pagePtr = (Page *)malloc(sizeof(*pagePtr));
     if (file->readPage(PageNo, pagePtr) != OK)
         return UNIXERR;
     bufPool[frameNo] = *pagePtr;
