@@ -68,47 +68,65 @@ BufMgr::~BufMgr()
     delete hashTable;
 }
 
+
 const Status BufMgr::allocBuf(int &frame)
 {
     int numPinned = 0;
     int clockStart = clockHand;
-    while (numPinned < numBufs)
+    while (numPinned / numBufs != 1)
     {
         if (clockHand == clockStart)
             numPinned = 0;
 
         advanceClock();
-        bufTable[clockHand];
-        if (!bufTable[clockHand].valid)
-            break;
-        if (bufTable[clockHand].refbit)
-        {
+        Page* pgptr = &bufPool[clockHand];
+
+        // Check validity
+        if (!bufTable[clockHand].valid) {
+            frame = bufTable[clockHand].frameNo;
+            bufTable[clockHand].Clear();
+            return OK;
+        }
+
+        // Check refbit
+        if (bufTable[clockHand].refbit) {
             bufTable[clockHand].refbit = false;
             continue;
         }
-        if (bufTable[clockHand].pinCnt >= 1)
-        {
-            numPinned++;
+
+        // Check pin count
+        if (bufTable[clockHand].pinCnt > 0) {
+            numPinned += 1;
             continue;
         }
-        if (bufTable[clockHand].dirty)
-        {
-            if (flushFile(bufTable[clockHand].file) != OK)
-                return UNIXERR;
-            break;
-        }
-    }
 
-    if (numPinned == numBufs)
-        return BUFFEREXCEEDED;
-    else
-    {
-        if (bufTable[clockHand].valid)
-            hashTable->remove(bufTable[clockHand].file, bufTable[clockHand].pageNo);
+        // Check dirty page
+        if (bufTable[clockHand].dirty) {
+            // Flush to disk
+            Status s = bufTable[clockHand].file->writePage(bufTable[clockHand].pageNo, pgptr);
+            if (s != OK) {
+                return UNIXERR;
+            }
+            bufTable[clockHand].dirty = false;
+        }
+
+        // If reach here, try to remove from hashtable
+        Status s2 = hashTable->remove(bufTable[clockHand].file, bufTable[clockHand].pageNo);
+        if (s2 != OK) {
+            return s2;
+        }
+
+        // If removing from hashtable returns no error, use the frame
+        bufTable[clockHand].Clear();
         frame = bufTable[clockHand].frameNo;
         return OK;
+        
     }
+
+    // If reach here, it means while loop has ended, and all pages are pinned, so buffer exceeded
+    return BUFFEREXCEEDED;
 }
+
 
 const Status BufMgr::readPage(File *file, const int PageNo, Page *&page)
 {
@@ -129,7 +147,7 @@ const Status BufMgr::readPage(File *file, const int PageNo, Page *&page)
     if (file->readPage(PageNo, pagePtr) != OK)
         return UNIXERR;
     bufPool[frameNo] = *pagePtr;
-
+    // free(pagePtr);
     if (hashTable->insert(file, PageNo, frameNo) != OK)
         return HASHTBLERROR;
 
