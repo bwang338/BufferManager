@@ -73,7 +73,7 @@ const Status BufMgr::allocBuf(int &frame)
 {
     int numPinned = 0;
     int clockStart = clockHand;
-    while (numPinned / numBufs != 1)
+    while (numPinned < numBufs)
     {
         if (clockHand == clockStart)
             numPinned = 0;
