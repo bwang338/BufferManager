@@ -72,29 +72,28 @@ const Status BufMgr::allocBuf(int &frame)
 {
     int numPinned = 0;
     int clockStart = clockHand;
-    BufDesc bufDesc;
     while (numPinned < numBufs)
     {
         if (clockHand == clockStart)
             numPinned = 0;
 
         advanceClock();
-        bufDesc = bufTable[clockHand];
-        if (!bufDesc.valid)
+        bufTable[clockHand];
+        if (!bufTable[clockHand].valid)
             break;
-        if (bufDesc.refbit)
+        if (bufTable[clockHand].refbit)
         {
-            bufDesc.refbit = false;
+            bufTable[clockHand].refbit = false;
             continue;
         }
-        if (bufDesc.refbit >= 1)
+        if (bufTable[clockHand].pinCnt >= 1)
         {
             numPinned++;
             continue;
         }
-        if (bufDesc.dirty)
+        if (bufTable[clockHand].dirty)
         {
-            if (flushFile(bufDesc.file) != OK)
+            if (flushFile(bufTable[clockHand].file) != OK)
                 return UNIXERR;
             break;
         }
@@ -104,9 +103,9 @@ const Status BufMgr::allocBuf(int &frame)
         return BUFFEREXCEEDED;
     else
     {
-        if (bufDesc.valid)
-            hashTable->remove(bufDesc.file, bufDesc.pageNo);
-        frame = bufDesc.frameNo;
+        if (bufTable[clockHand].valid)
+            hashTable->remove(bufTable[clockHand].file, bufTable[clockHand].pageNo);
+        frame = bufTable[clockHand].frameNo;
         return OK;
     }
 }
@@ -160,21 +159,24 @@ const Status BufMgr::unPinPage(File *file, const int PageNo,
 
 const Status BufMgr::allocPage(File *file, int &pageNo, Page *&page)
 {
-    if (file->allocatePage(pageNo) == UNIXERR){
+    if (file->allocatePage(pageNo) == UNIXERR)
+    {
         return UNIXERR;
     }
     int frameNum;
-    if (allocBuf(frameNum) == BUFFEREXCEEDED){
+    if (allocBuf(frameNum) == BUFFEREXCEEDED)
+    {
         return BUFFEREXCEEDED;
     }
 
-    if (hashTable->insert(file, pageNo, frameNum) == HASHTBLERROR){
+    if (hashTable->insert(file, pageNo, frameNum) == HASHTBLERROR)
+    {
         return HASHTBLERROR;
     }
     bufTable[frameNum].Set(file, pageNo);
-    
-    page = &bufPool[frameNum];
 
+    page = &bufPool[frameNum];
+    return OK;
 }
 
 const Status BufMgr::disposePage(File *file, const int pageNo)
